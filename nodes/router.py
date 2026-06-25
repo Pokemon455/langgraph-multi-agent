@@ -21,3 +21,7 @@ async def router_node(state: State):
         return {"router_decision": r.decision, "reasoning": r.reasoning}
     except Exception as e:
         return {"router_decision": "direct", "reasoning": str(e)}
+
+
+def route_condition(state: State) -> str:
+    return "llm_tool" if state["router_decision"] != "direct" else "answer"
