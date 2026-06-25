@@ -9,6 +9,16 @@ from tools import RAG, search_web, mcp_client
 import config
 
 
+def _route(s):
+    return "llm_tool" if s["router_decision"] != "direct" else "answer"
+
+def _tool_or_answer(s):
+    last = s["messages"][-1]
+    if isinstance(last, AIMessage) and last.tool_calls and s.get("iteration_count", 0) < config.MAX_ITERATIONS:
+        return "tools"
+    return "answer"
+
+
 async def build_graph():
     mcp_tools = await asyncio.wait_for(mcp_client.get_tools(), timeout=30)
     tools     = [RAG, search_web, *mcp_tools]
@@ -19,9 +29,9 @@ async def build_graph():
     g.add_node("tools",    ToolNode(tools))
     g.add_node("answer",   answer_node)
 
-    g.add_edge(START, "router")
-    g.add_conditional_edges("router",   lambda s: "llm_tool" if s["router_decision"] != "direct" else "answer", ["llm_tool", "answer"])
-    g.add_conditional_edges("llm_tool", lambda s: "tools" if isinstance(s["messages"][-1], AIMessage) and s["messages"][-1].tool_calls and s.get("iteration_count", 0) < config.MAX_ITERATIONS else "answer", ["tools", "answer"])
+    g.add_edge(START,    "router")
+    g.add_conditional_edges("router",   _route,          ["llm_tool", "answer"])
+    g.add_conditional_edges("llm_tool", _tool_or_answer, ["tools",    "answer"])
     g.add_edge("tools",  "answer")
     g.add_edge("answer", END)
 
